@@ -21,7 +21,6 @@
           - dnsdist
         state: present
 
-    # Configure PowerDNS (Authoritative Server)
     - name: Configure PowerDNS with BIND backend
       copy:
         dest: /etc/powerdns/pdns.conf
@@ -30,20 +29,30 @@
           bind-config=/etc/powerdns/named.conf
           api=yes
           api-key=supersecretapikey
-          default-soa-name=ns1.gslb.netsvcs.onemain.private
 
       notify:
         - Restart PowerDNS
 
-    # Create the BIND Zone Configuration
-    - name: Create PowerDNS BIND configuration file
+    - name: Create DNS zone file
       copy:
-        dest: /etc/powerdns/named.conf
+        dest: /etc/powerdns/zones/gslb.netsvcs.onemain.private.zone
         content: |
-          zone "gslb.netsvcs.onemain.private" {
-              type master;
-              file "/etc/powerdns/zones/gslb.netsvcs.onemain.private.zone";
-          };
+          $TTL 60
+          @   IN  SOA  ns1.gslb.netsvcs.onemain.private. admin.gslb.netsvcs.onemain.private. (
+                   2025031101 ; Serial
+                   1800       ; Refresh
+                   900        ; Retry
+                   604800     ; Expire
+                   60 )       ; TTL
+          @   IN  NS   ns1.gslb.netsvcs.onemain.private.
+
+          ;; GSLB Records with Geo-Aware Balancing
+          www IN  A 192.168.1.10  ; US-East
+          www IN  A 192.168.2.10  ; US-West
+
+      notify:
+        - Restart PowerDNS
+
 
       notify:
         - Restart PowerDNS
