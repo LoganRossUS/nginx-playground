@@ -1,0 +1,83 @@
+---
+- name: Configure PowerDNS and dnsdist for GSLB
+  hosts: core
+  become: yes
+  tasks:
+
+    # Disable and stop systemd-resolved
+    - name: Disable systemd-resolved
+      systemd:
+        name: systemd-resolved
+        state: stopped
+        enabled: no
+        masked: yes
+
+    # Ensure systemd-resolved is disabled permanently
+    - name: Remove systemd-resolved stub resolver file
+      file:
+        path: /etc/resolv.conf
+        state: absent
+
+    - name: Create new resolv.conf to avoid conflicts
+      copy:
+        dest: /etc/resolv.conf
+        content: |
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+        owner: root
+        group: root
+        mode: '0644'
+
+    # Modify dnsdist to listen on port 5353 instead of 53
+    - name: Configure dnsdist to use port 5353
+      copy:
+        dest: /etc/dnsdist/dnsdist.conf
+        content: |
+          setLocal("127.0.0.1:5353")  -- Move dnsdist to port 5353
+          newServer("127.0.0.1:53")   -- Forward queries to PowerDNS
+          webserver("0.0.0.0:8083", "supersecretapikey")  -- Enable API
+        owner: dnsdist
+        group: dnsdist
+        mode: '0644'
+      notify:
+        - Restart dnsdist
+
+    # Restart PowerDNS
+    - name: Restart PowerDNS
+      systemd:
+        name: pdns
+        state: restarted
+        enabled: yes
+
+    # Restart dnsdist
+    - name: Restart dnsdist
+      systemd:
+        name: dnsdist
+        state: restarted
+        enabled: yes
+
+    # Verify PowerDNS is responding
+    - name: Check PowerDNS response for GSLB domain
+      command: dig @127.0.0.1 gslb.netsvcs.onemain.private A
+      register: dig_result
+      changed_when: false
+
+    - name: Display PowerDNS response
+      debug:
+        msg: "{{ dig_result.stdout_lines }}"
+
+    # Verify dnsdist is responding on port 5353
+    - name: Check dnsdist response for GSLB domain
+      command: dig @127.0.0.1 -p 5353 gslb.netsvcs.onemain.private A
+      register: dnsdist_result
+      changed_when: false
+
+    - name: Display dnsdist response
+      debug:
+        msg: "{{ dnsdist_result.stdout_lines }}"
+
+  handlers:
+    - name: Restart dnsdist
+      systemd:
+        name: dnsdist
+        state: restarted

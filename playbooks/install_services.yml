@@ -1,0 +1,38 @@
+---
+- name: Install NGINX on web nodes
+  hosts: web
+  become: yes
+  tasks:
+    - name: Install NGINX
+      package:
+        name: nginx
+        state: present
+
+    - name: Ensure NGINX is enabled and running
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+- name: Install PowerDNS and dnsdist on core nodes
+  hosts: core
+  become: yes
+  tasks:
+    - name: Install PowerDNS and dnsdist
+      package:
+        name:
+          - pdns-server
+          - dnsdist
+        state: present
+
+    - name: Ensure PowerDNS is enabled and running
+      service:
+        name: pdns
+        state: started
+        enabled: yes
+
+    - name: Ensure dnsdist is enabled and running
+      service:
+        name: dnsdist
+        state: started
+        enabled: yes

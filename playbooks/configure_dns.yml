@@ -1,0 +1,104 @@
+---
+- name: Install and configure PowerDNS and dnsdist for GSLB
+  hosts: core
+  become: yes
+  tasks:
+
+    - name: Ensure PowerDNS zone directory exists
+      file:
+        path: /etc/powerdns/zones
+        state: directory
+        owner: pdns
+        group: pdns
+        mode: '0755'
+
+    # Install PowerDNS and dnsdist
+    - name: Install PowerDNS and dnsdist
+      package:
+        name:
+          - pdns-server
+          - pdns-backend-bind
+          - dnsdist
+        state: present
+
+    - name: Configure PowerDNS with BIND backend
+      copy:
+        dest: /etc/powerdns/pdns.conf
+        content: |
+          launch=bind
+          bind-config=/etc/powerdns/named.conf
+          api=yes
+          api-key=supersecretapikey
+
+      notify:
+        - Restart PowerDNS
+
+    - name: Create DNS zone file
+      copy:
+        dest: /etc/powerdns/zones/gslb.netsvcs.onemain.private.zone
+        content: |
+          $TTL 60
+          @   IN  SOA  ns1.gslb.netsvcs.onemain.private. admin.gslb.netsvcs.onemain.private. (
+                   2025031101 ; Serial
+                   1800       ; Refresh
+                   900        ; Retry
+                   604800     ; Expire
+                   60 )       ; TTL
+          @   IN  NS   ns1.gslb.netsvcs.onemain.private.
+
+          ;; GSLB Records with Geo-Aware Balancing
+          www IN  A 192.168.1.10  ; US-East
+          www IN  A 192.168.2.10  ; US-West
+
+      notify:
+        - Restart PowerDNS
+
+
+      notify:
+        - Restart PowerDNS
+
+    # Create the DNS Zone File for GSLB
+    - name: Create DNS zone file
+      copy:
+        dest: /etc/powerdns/zones/gslb.netsvcs.onemain.private.zone
+        content: |
+          $TTL 60
+          @   IN  SOA  ns1.gslb.netsvcs.onemain.private. admin.gslb.netsvcs.onemain.private. (
+                   2025031101 ; Serial
+                   1800       ; Refresh
+                   900        ; Retry
+                   604800     ; Expire
+                   60 )       ; TTL
+          @   IN  NS   ns1.gslb.netsvcs.onemain.private.
+
+          ;; GSLB Records with Geo-Aware Balancing
+          www IN  A 192.168.1.10  ; US-East
+          www IN  A 192.168.2.10  ; US-West
+
+      notify:
+        - Restart PowerDNS
+
+    # Configure dnsdist for Load Balancing
+    - name: Configure dnsdist
+      copy:
+        dest: /etc/dnsdist/dnsdist.conf
+        content: |
+          setLocal("0.0.0.0:53")
+          setACL({"0.0.0.0/0", "::/0"})  -- Allow all queries
+          newServer({address="192.168.1.10", qps=50})  -- US-East
+          newServer({address="192.168.2.10", qps=50})  -- US-West
+          webserver("0.0.0.0:8083", "supersecretapikey")  -- Enable API
+
+      notify:
+        - Restart dnsdist
+
+  handlers:
+    - name: Restart PowerDNS
+      service:
+        name: pdns
+        state: restarted
+
+    - name: Restart dnsdist
+      service:
+        name: dnsdist
+        state: restarted
