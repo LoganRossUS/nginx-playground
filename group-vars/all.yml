@@ -8,3 +8,4 @@ ansible_password: !vault |
           6232
 ansible_become: yes
 ansible_become_method: sudo
+ansible_ssh_common_args: '-o PreferredAuthentications=password'
