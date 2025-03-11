@@ -4,6 +4,14 @@
   become: yes
   tasks:
 
+    - name: Ensure PowerDNS zone directory exists
+      file:
+        path: /etc/powerdns/zones
+        state: directory
+        owner: pdns
+        group: pdns
+        mode: '0755'
+
     # Install PowerDNS and dnsdist
     - name: Install PowerDNS and dnsdist
       package:
